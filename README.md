@@ -80,6 +80,10 @@ Amazon ECS Express Mode
 
 The deployment workflow is `.github/workflows/deploy.yml`. A successful push to `main` triggers a deployment. The workflow creates the ECS Express Mode service on the first deployment and updates it on later deployments.
 
+## Deployment status
+
+**AWS deployment status: not yet verified.** The repository contains a GitHub Actions deployment workflow and an AWS bootstrap script, but those files do not prove that AWS resources have been created or that a deployment succeeded. A live deployment requires an AWS account, successful execution of `scripts/bootstrap-aws.sh`, the `AWS_REGION` and `AWS_DEPLOY_ROLE_ARN` repository variables, and a successful deployment workflow run with a passing HTTPS health check. Until that run exists, describe this project as deployment-ready infrastructure code rather than a deployed AWS application.
+
 ## One-time AWS setup
 
 You need an AWS account with permissions to create IAM roles, an OIDC provider, an ECR repository, and ECS Express Mode resources. The account must have a default VPC with public subnets in the selected Region.

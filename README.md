@@ -98,7 +98,7 @@ A successful workflow confirms that the configured static checks and automated t
 .
 ├── .github/
 │   └── workflows/
-│       └── ci.yml
+│       └── main.yml
 ├── app.py
 ├── test_app.py
 ├── requirements.txt

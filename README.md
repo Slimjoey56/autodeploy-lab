@@ -88,7 +88,7 @@ curl http://127.0.0.1:5000/health
 
 ## Continuous integration
 
-The workflow in `.github/workflows/ci.yml` runs on pushes and pull requests targeting `main`. It installs the development dependencies, checks the code with Ruff, and runs the pytest suite.
+The workflow in `.github/workflows/main.yml` runs on pushes and pull requests targeting `main`. It installs the development dependencies, checks the code with Ruff, and runs the pytest suite.
 
 A successful workflow confirms that the configured static checks and automated tests passed in the GitHub Actions runner. It does not, by itself, confirm that the application has been deployed.
 

@@ -165,7 +165,7 @@ cat > "$TMP_DIR/github-deploy-policy.json" <<JSON
           "iam:AWSServiceName": [
             "ecs.amazonaws.com",
             "elasticloadbalancing.amazonaws.com",
-            "application-autoscaling.amazonaws.com"
+            "ecs.application-autoscaling.amazonaws.com"
           ]
         }
       }

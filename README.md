@@ -1,26 +1,19 @@
 # AutoDeploy Lab
 
-A small Flask service used to practise automated testing and continuous integration with GitHub Actions. The repository includes a container build so the application can be run consistently outside a local development environment.
+A Flask service for practising automated testing, container builds and continuous deployment to AWS.
 
-## Current functionality
+## Application
 
 - `GET /` returns the service name and running status.
-- `GET /health` returns a health-check response.
-- Pytest tests the HTTP status codes and JSON response bodies.
-- GitHub Actions runs linting and tests for pushes and pull requests targeting `main`.
-- Docker packages the application with Gunicorn for container-based execution.
-
-This repository currently implements continuous integration. It does not automatically publish or deploy the application to a cloud platform.
-
-## Requirements
-
-- Python 3.12+
-- pip
-- Docker (optional, for container execution)
+- `GET /health` is the health-check endpoint used by the load balancer.
+- Pytest covers the HTTP status codes and JSON response bodies.
+- Ruff checks Python code quality.
+- Docker packages the service with Gunicorn.
+- GitHub Actions builds the image, pushes it to Amazon ECR and deploys it to Amazon ECS Express Mode on Fargate.
 
 ## Run locally
 
-Create and activate a virtual environment:
+Requires Python 3.12 or later.
 
 ```bash
 python -m venv .venv
@@ -38,67 +31,134 @@ macOS or Linux:
 source .venv/bin/activate
 ```
 
-Install the application and development dependencies:
+Install dependencies and run the service:
 
 ```bash
 python -m pip install -r requirements-dev.txt
-```
-
-Start the development server:
-
-```bash
 python app.py
 ```
 
-The service listens on `http://127.0.0.1:5000`.
+Open `http://127.0.0.1:5000` or `http://127.0.0.1:5000/health`.
 
-## Run quality checks
-
-Run Ruff:
+Run checks:
 
 ```bash
 ruff check .
-```
-
-Run the test suite:
-
-```bash
 pytest -q
 ```
 
 ## Run with Docker
 
-Build the image:
-
 ```bash
 docker build -t autodeploy-lab .
-```
-
-Start the container:
-
-```bash
 docker run --rm -p 5000:5000 autodeploy-lab
 ```
 
-Check the health endpoint:
+## AWS deployment architecture
 
-```bash
-curl http://127.0.0.1:5000/health
+```text
+GitHub push to main
+       |
+       v
+GitHub Actions
+  - Ruff and pytest
+  - Build Docker image
+       |
+       | OIDC role assumption (temporary credentials)
+       v
+Amazon ECR
+       |
+       v
+Amazon ECS Express Mode
+       |
+       +-- AWS Fargate task
+       +-- Application Load Balancer
+       +-- HTTPS endpoint
+       +-- Health checks and managed scaling
+       +-- CloudWatch logs
 ```
 
-## Continuous integration
+The deployment workflow is `.github/workflows/deploy.yml`. A successful push to `main` triggers a deployment. The workflow creates the ECS Express Mode service on the first deployment and updates it on later deployments.
 
-The workflow in `.github/workflows/main.yml` runs on pushes and pull requests targeting `main`. It installs the development dependencies, checks the code with Ruff, and runs the pytest suite.
+## One-time AWS setup
 
-A successful workflow confirms that the configured static checks and automated tests passed in the GitHub Actions runner. It does not, by itself, confirm that the application has been deployed.
+You need an AWS account with permissions to create IAM roles, an OIDC provider, an ECR repository, and ECS Express Mode resources. The account must have a default VPC with public subnets in the selected Region.
+
+1. Open AWS CloudShell in the Region you intend to use. The bootstrap script defaults to `eu-west-1`; change it if required.
+2. Clone this repository in CloudShell:
+
+   ```bash
+   git clone https://github.com/Slimjoey56/autodeploy-lab.git
+   cd autodeploy-lab
+   ```
+
+3. Run the bootstrap script:
+
+   ```bash
+   chmod +x scripts/bootstrap-aws.sh
+   AWS_REGION=eu-west-1 ./scripts/bootstrap-aws.sh
+   ```
+
+   The script creates or configures:
+   - A GitHub Actions OIDC identity provider.
+   - An IAM deployment role restricted to this repository's `main` branch.
+   - The ECS task execution role.
+   - The ECS Express Mode infrastructure role.
+   - The ECR repository with image scanning and a lifecycle rule retaining the latest 15 images.
+
+4. In GitHub, open **Settings → Secrets and variables → Actions → Variables** and add these repository variables using the values printed by the script:
+
+   | Variable | Value |
+   |---|---|
+   | `AWS_REGION` | Region used by the bootstrap script |
+   | `AWS_DEPLOY_ROLE_ARN` | ARN printed for `GitHubActionsAutoDeployLabRole` |
+
+   These are variables, not secrets. The role ARN is not a credential. GitHub receives short-lived AWS credentials through OIDC; do not create or store AWS access keys in GitHub.
+
+5. Push a commit to `main`, or run **Actions → Deploy to AWS → Run workflow**. The workflow runs checks, builds and pushes the image, then creates or updates the ECS Express Mode service.
+
+6. Open the successful deployment run in GitHub Actions. The job summary contains the HTTPS application URL and health-check URL.
+
+## AWS resources and costs
+
+This setup is not guaranteed to be free. ECS Express Mode has no separate Express Mode fee, but AWS bills for the resources it provisions and uses. Expect charges for:
+
+- Fargate task CPU and memory while the service runs.
+- The Application Load Balancer, including hourly and capacity-unit charges.
+- Public IPv4 addresses.
+- ECR image storage and image transfer.
+- CloudWatch logs and metrics.
+- Internet data transfer.
+
+The service is configured with one small task (0.25 vCPU and 512 MiB) and a maximum of one task to limit compute usage. The load balancer and other supporting resources still incur costs while provisioned. Check the AWS Pricing Calculator for your selected Region and create an AWS Budget before deploying.
+
+## Removing AWS resources
+
+Deleting the ECS Express Mode service does not automatically remove the ECR repository or IAM roles created by the bootstrap script. To stop ongoing application infrastructure charges, delete the Express Mode service from the ECS console or with the AWS CLI:
+
+```bash
+aws ecs list-clusters
+aws ecs list-services --cluster default
+aws ecs delete-express-gateway-service --service-arn YOUR_SERVICE_ARN --monitor-resources RESOURCE --monitor-mode TEXT-ONLY
+```
+
+After the service is deleted, remove the ECR repository if you no longer need the images:
+
+```bash
+aws ecr delete-repository --repository-name autodeploy-lab --force
+```
+
+The IAM roles and GitHub OIDC provider can also be removed when no longer needed. Do not delete an OIDC provider if other repositories or workflows in your AWS account depend on it.
 
 ## Project structure
 
 ```text
 .
-├── .github/
-│   └── workflows/
-│       └── main.yml
+├── .github/workflows/
+│   ├── main.yml
+│   └── deploy.yml
+├── scripts/
+│   └── bootstrap-aws.sh
 ├── app.py
 ├── test_app.py
 ├── requirements.txt
@@ -111,7 +171,7 @@ A successful workflow confirms that the configured static checks and automated t
 
 ## Scope
 
-The project is intentionally small. The next deployment stage would require selecting a hosting target and adding the corresponding deployment workflow and credentials through GitHub Actions secrets or a cloud identity mechanism.
+This repository demonstrates a small Flask API, automated quality checks, container image publishing and continuous deployment to AWS ECS Express Mode. It is a deployment learning project, not a high-availability production service with a database or application-specific authentication.
 
 ## Author
 

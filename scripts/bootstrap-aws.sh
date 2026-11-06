@@ -126,14 +126,13 @@ cat > "$TMP_DIR/github-deploy-policy.json" <<JSON
       "Sid": "DeployExpressService",
       "Effect": "Allow",
       "Action": [
-        "ecs:AssociateGatewayWithCluster",
         "ecs:CreateCluster",
         "ecs:CreateExpressGatewayService",
-        "ecs:CreateGateway",
         "ecs:DescribeClusters",
         "ecs:DescribeExpressGatewayService",
         "ecs:ListClusters",
         "ecs:ListServices",
+        "ecs:RegisterTaskDefinition",
         "ecs:TagResource",
         "ecs:UpdateExpressGatewayService"
       ],

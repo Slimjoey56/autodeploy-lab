@@ -11,10 +11,11 @@ permissions:
 
 concurrency:
   group: production-deploy
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
+    if: ${{ vars.AWS_DEPLOY_ROLE_ARN != '' && vars.AWS_REGION != '' }}
     name: Build and deploy
     runs-on: ubuntu-latest
     env:
@@ -163,4 +164,18 @@ jobs:
             echo "- Health check: `$ENDPOINT/health`"
             echo "- Application: $ENDPOINT"
             echo "- Image: `$IMAGE_URI`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  setup-required:
+    if: ${{ vars.AWS_DEPLOY_ROLE_ARN == '' || vars.AWS_REGION == '' }}
+    name: AWS setup required
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain required configuration
+        run: |
+          {
+            echo "## AWS deployment is not configured"
+            echo
+            echo "Run `scripts/bootstrap-aws.sh` from AWS CloudShell, then add the `AWS_REGION` and `AWS_DEPLOY_ROLE_ARN` repository variables in GitHub Settings."
+            echo "No AWS credentials or cloud resources were created by this workflow."
           } >> "$GITHUB_STEP_SUMMARY"

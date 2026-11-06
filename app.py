@@ -1,22 +1,30 @@
-from flask import Flask
+"""Flask application factory for AutoDeploy Lab."""
 
-app = Flask(__name__)
-
-
-@app.route("/")
-def home():
-    return {
-        "message": "AutoDeploy Lab is running!",
-        "status": "success"
-    }
+from flask import Flask, jsonify
 
 
-@app.route("/health")
-def health():
-    return {
-        "status": "healthy"
-    }
+def create_app(test_config: dict | None = None) -> Flask:
+    """Create and configure the Flask application."""
+    app = Flask(__name__)
+    app.config.from_mapping(TESTING=False)
+
+    if test_config:
+        app.config.update(test_config)
+
+    @app.get("/")
+    def index():
+        return jsonify(
+            service="AutoDeploy Lab",
+            status="running",
+        )
+
+    @app.get("/health")
+    def health_check():
+        return jsonify(status="healthy"), 200
+
+    return app
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    application = create_app()
+    application.run(host="127.0.0.1", port=5000)

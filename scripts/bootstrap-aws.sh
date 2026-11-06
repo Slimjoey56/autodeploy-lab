@@ -16,6 +16,20 @@ command -v jq >/dev/null || { echo "jq is required." >&2; exit 1; }
 
 ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
 PARTITION="$(aws sts get-caller-identity --query Arn --output text | cut -d: -f2)"
+
+DEFAULT_VPC="$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true \
+  --region "$AWS_REGION" --query 'Vpcs[0].VpcId' --output text)"
+if [[ -z "$DEFAULT_VPC" || "$DEFAULT_VPC" == "None" ]]; then
+  echo "No default VPC exists in $AWS_REGION. Create a default VPC with public subnets before running this script." >&2
+  exit 1
+fi
+
+PUBLIC_SUBNET_COUNT="$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$DEFAULT_VPC" \
+  --region "$AWS_REGION" --query 'length(Subnets)' --output text)"
+if (( PUBLIC_SUBNET_COUNT < 2 )); then
+  echo "The default VPC in $AWS_REGION needs at least two subnets for the public load balancer." >&2
+  exit 1
+fi
 OIDC_URL="token.actions.githubusercontent.com"
 OIDC_ARN=""
 
@@ -204,12 +218,6 @@ aws ecr put-lifecycle-policy --repository-name "$ECR_REPOSITORY" \
   --lifecycle-policy-text "file://$TMP_DIR/ecr-lifecycle.json" \
   --region "$AWS_REGION" >/dev/null
 
-DEFAULT_VPC="$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true \
-  --region "$AWS_REGION" --query 'Vpcs[0].VpcId' --output text)"
-if [[ -z "$DEFAULT_VPC" || "$DEFAULT_VPC" == "None" ]]; then
-  echo "No default VPC exists in $AWS_REGION. Create a default VPC with public subnets before deploying ECS Express Mode." >&2
-  exit 1
-fi
 
 DEPLOY_ROLE_ARN="arn:$PARTITION:iam::$ACCOUNT_ID:role/$DEPLOY_ROLE_NAME"
 
